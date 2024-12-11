@@ -21,7 +21,7 @@ import {
 } from '@patternfly/react-table';
 import { useState } from 'react';
 import { Workspace, WorkspaceState } from '~/shared/types';
-import Filter from '~/app/Generic components/Filter';
+import Filter from '~/shared/components/Filter';
 
 /* Mocked workspaces, to be removed after fetching info from backend */
 const mockWorkspaces: Workspace[] = [
@@ -103,6 +103,84 @@ const mockWorkspaces: Workspace[] = [
       stateMessage: 'It is running.',
     },
   },
+  {
+    name: 'test1',
+    namespace: 'namespace1',
+    paused: false,
+    deferUpdates: false,
+    kind: 'jupyter-lab',
+    podTemplate: {
+      volumes: {
+        home: '/home',
+        data: [
+          {
+            pvcName: 'data',
+            mountPath: '/data',
+            readOnly: false,
+          },
+        ],
+      },
+    },
+    options: {
+      imageConfig: 'jupyterlab_scipy_180',
+      podConfig: 'Small CPU',
+    },
+    status: {
+      activity: {
+        lastActivity: 0,
+        lastUpdate: 0,
+      },
+      pauseTime: 0,
+      pendingRestart: false,
+      podTemplateOptions: {
+        imageConfig: {
+          desired: '',
+          redirectChain: [],
+        },
+      },
+      state: WorkspaceState.Paused,
+      stateMessage: 'It is running.',
+    },
+  },
+  {
+    name: 'test2',
+    namespace: 'namespace1',
+    paused: false,
+    deferUpdates: false,
+    kind: 'jupyter-lab',
+    podTemplate: {
+      volumes: {
+        home: '/home',
+        data: [
+          {
+            pvcName: 'data',
+            mountPath: '/data',
+            readOnly: false,
+          },
+        ],
+      },
+    },
+    options: {
+      imageConfig: 'jupyterlab_scipy_180',
+      podConfig: 'Large CPU',
+    },
+    status: {
+      activity: {
+        lastActivity: 0,
+        lastUpdate: 0,
+      },
+      pauseTime: 0,
+      pendingRestart: false,
+      podTemplateOptions: {
+        imageConfig: {
+          desired: '',
+          redirectChain: [],
+        },
+      },
+      state: WorkspaceState.Running,
+      stateMessage: 'It is running.',
+    },
+  },
 ];
 
 // Table columns
@@ -123,34 +201,46 @@ export const Workspaces: React.FunctionComponent = () => {
   const [workspaces, setWorkspaces] = useState(initialWorkspaces);
 
   // filter function to pass to the filter component
-  const onFilter = (activeAttributeMenu: string, searchValue: string) => {
+  const onFilter = (filters: { filterName: string; value: string }[]) => {
     // Search name with search value
-    let searchValueInput: RegExp;
-    try {
-      searchValueInput = new RegExp(searchValue, 'i');
-    } catch {
-      searchValueInput = new RegExp(searchValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-    }
-    const filteredWorkspaces = initialWorkspaces.filter(
-      (workspace) =>
-        searchValue === '' ||
-        (activeAttributeMenu === 'Name' && workspace.name.search(searchValueInput) >= 0) ||
-        (activeAttributeMenu === 'Kind' && workspace.kind.search(searchValueInput) >= 0) ||
-        (activeAttributeMenu === 'Image' &&
-          workspace.options.imageConfig.search(searchValueInput) >= 0) ||
-        (activeAttributeMenu === 'Pod Config' &&
-          workspace.options.podConfig.search(searchValueInput) >= 0) ||
-        (activeAttributeMenu === 'State' &&
-          WorkspaceState[workspace.status.state].search(searchValueInput) >= 0) ||
-        (activeAttributeMenu === 'Home Vol' &&
-          workspace.podTemplate.volumes.home.search(searchValueInput) >= 0) ||
-        (activeAttributeMenu === 'Data Vol' &&
-          workspace.podTemplate.volumes.data.some(
-            (dataVol) =>
-              dataVol.pvcName.search(searchValueInput) >= 0 ||
-              dataVol.mountPath.search(searchValueInput) >= 0,
-          )),
-    );
+    let filteredWorkspaces = initialWorkspaces;
+    filters.forEach((filter) => {
+      let searchValueInput: RegExp;
+      try {
+        searchValueInput = new RegExp(filter.value, 'i');
+      } catch {
+        searchValueInput = new RegExp(filter.value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      }
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-expect-error
+      // eslint-disable-next-line array-callback-return
+      filteredWorkspaces = filteredWorkspaces.filter((workspace) => {
+        if (filter.value === '') {
+          return true;
+        }
+        switch (filter.filterName) {
+          case 'Name':
+            return workspace.name.search(searchValueInput) >= 0;
+          case 'Kind':
+            return workspace.kind.search(searchValueInput) >= 0;
+          case 'Image':
+            return workspace.options.imageConfig.search(searchValueInput) >= 0;
+          case 'Pod Config':
+            return workspace.options.podConfig.search(searchValueInput) >= 0;
+          case 'State':
+            return WorkspaceState[workspace.status.state].search(searchValueInput) >= 0;
+          case 'Home Vol':
+            return workspace.podTemplate.volumes.home.search(searchValueInput) >= 0;
+          case 'Data Vol':
+            return workspace.podTemplate.volumes.data.some(
+              (dataVol) =>
+                dataVol.pvcName.search(searchValueInput) >= 0 ||
+                dataVol.mountPath.search(searchValueInput) >= 0,
+            );
+          default:
+        }
+      });
+    });
     setWorkspaces(filteredWorkspaces);
   };
 
@@ -270,24 +360,21 @@ export const Workspaces: React.FunctionComponent = () => {
     <PageSection>
       <Title headingLevel="h1">Kubeflow Workspaces</Title>
       <p>View your existing workspaces or create new workspaces.</p>
-      <Filter onFilter={onFilter} columnNames={columnNames} />
+      <Filter id="filter-workspaces" onFilter={onFilter} columnNames={columnNames} />
       <Table aria-label="Sortable table" ouiaId="SortableTable">
         <Thead>
           <Tr>
-            <Th sort={getSortParams(0)}>{columnNames.name}</Th>
-            <Th sort={getSortParams(1)}>{columnNames.kind}</Th>
-            <Th sort={getSortParams(2)}>{columnNames.image}</Th>
-            <Th sort={getSortParams(3)}>{columnNames.podConfig}</Th>
-            <Th sort={getSortParams(4)}>{columnNames.state}</Th>
-            <Th sort={getSortParams(5)}>{columnNames.homeVol}</Th>
-            <Th sort={getSortParams(6)}>{columnNames.dataVol}</Th>
-            <Th sort={getSortParams(7)}>{columnNames.lastActivity}</Th>
+            {Object.values(columnNames).map((columnName, index) => (
+              <Th key={`${columnName}-col-name`} sort={getSortParams(index)}>
+                {columnName}
+              </Th>
+            ))}
             <Th screenReaderText="Primary action" />
           </Tr>
         </Thead>
-        <Tbody>
+        <Tbody id="workspaces-table-content">
           {sortedWorkspaces.map((workspace, rowIndex) => (
-            <Tr key={rowIndex}>
+            <Tr id={`workspaces-table-row-${rowIndex + 1}`} key={rowIndex}>
               <Td dataLabel={columnNames.name}>{workspace.name}</Td>
               <Td dataLabel={columnNames.kind}>{workspace.kind}</Td>
               <Td dataLabel={columnNames.image}>{workspace.options.imageConfig}</Td>
